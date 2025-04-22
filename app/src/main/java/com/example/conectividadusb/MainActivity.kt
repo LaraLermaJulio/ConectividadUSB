@@ -1,5 +1,5 @@
-// MainActivity.kt
-package com.example.usbtest
+
+package com.example.conectividadusb
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -8,7 +8,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -31,17 +30,30 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 class MainActivity : ComponentActivity() {
     private val ACTION_USB_PERMISSION = "com.example.usbtest.USB_PERMISSION"
     private lateinit var usbManager: UsbManager
+    private var selectedDevice: UsbDevice? = null
 
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 ACTION_USB_PERMISSION -> {
                     synchronized(this) {
-                        val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                        val device: UsbDevice? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                        }
+
                         if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
                             device?.let {
-                                // Permiso concedido, podemos interactuar con el dispositivo
+                                // Permiso concedido, conectamos con el dispositivo
+                                selectedDevice = it
+                                if (::viewModel.isInitialized) {
+                                    viewModel.connectToDevice(it)
+                                }
                             }
+                        } else {
+                            // Permiso denegado
                         }
                     }
                 }
@@ -49,6 +61,20 @@ class MainActivity : ComponentActivity() {
                     refreshDeviceList()
                 }
                 UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                    val device: UsbDevice? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    }
+
+                    if (device != null && device == selectedDevice) {
+                        if (::viewModel.isInitialized) {
+                            viewModel.disconnectDevice()
+                        }
+                        selectedDevice = null
+                    }
+
                     refreshDeviceList()
                 }
             }
@@ -108,50 +134,9 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(usbReceiver)
-    }
-}
-
-class UsbViewModel(
-    private val usbManager: UsbManager,
-    private val activity: MainActivity
-) : ViewModel() {
-    private val _deviceList = mutableStateListOf<UsbDevice>()
-    val deviceList: List<UsbDevice> = _deviceList
-
-    private val _statusText = mutableStateOf("Estado: Esperando dispositivos USB...")
-    val statusText: State<String> = _statusText
-
-    init {
-        refreshDeviceList()
-    }
-
-    fun refreshDeviceList() {
-        _deviceList.clear()
-
-        val deviceList = usbManager.deviceList
-        if (deviceList.isEmpty()) {
-            _statusText.value = "Estado: No hay dispositivos USB conectados"
-            return
+        if (::viewModel.isInitialized) {
+            viewModel.disconnectDevice()
         }
-
-        _statusText.value = "Estado: ${deviceList.size} dispositivo(s) encontrado(s)"
-
-        _deviceList.addAll(deviceList.values)
-    }
-
-    fun requestPermission(device: UsbDevice) {
-        activity.requestUsbPermission(device)
-    }
-
-    // Función para obtener información formateada del dispositivo
-    fun getDeviceInfo(device: UsbDevice): String {
-        return """
-            Nombre: ${device.deviceName}
-            ID Fabricante: ${device.vendorId}
-            ID Producto: ${device.productId}
-            Clase: ${device.deviceClass}
-            Interfaces: ${device.interfaceCount}
-        """.trimIndent()
     }
 }
 
@@ -173,6 +158,9 @@ fun UsbTestScreen(viewModel: UsbViewModel) {
     val context = LocalContext.current
     val statusText by remember { viewModel.statusText }
     val deviceList = remember { viewModel.deviceList }
+    val connectedDevice by remember { viewModel.connectedDevice }
+    val messageToSend by remember { viewModel.messageToSend }
+    val receivedMessages = remember { viewModel.receivedMessages }
 
     Column(
         modifier = Modifier
@@ -204,22 +192,103 @@ fun UsbTestScreen(viewModel: UsbViewModel) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "Dispositivos conectados:",
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        LazyColumn(
-            modifier = Modifier.weight(1f)
-        ) {
-            items(deviceList) { device ->
-                DeviceItem(
-                    device = device,
-                    info = viewModel.getDeviceInfo(device),
-                    onDeviceClick = { viewModel.requestPermission(device) }
+        if (connectedDevice != null) {
+            // Si hay un dispositivo conectado, mostrar la interfaz de chat
+            Column {
+                Text(
+                    text = "Conectado a: ${connectedDevice?.deviceName}",
+                    fontWeight = FontWeight.Bold
                 )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = { viewModel.disconnectDevice() },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Desconectar")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Área de mensajes recibidos
+                Text(
+                    text = "Mensajes recibidos:",
+                    fontWeight = FontWeight.Bold
+                )
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .padding(vertical = 8.dp)
+                ) {
+                    items(receivedMessages) { message ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Text(
+                                text = message,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Área de envío de mensajes
+                Text(
+                    text = "Enviar mensaje:",
+                    fontWeight = FontWeight.Bold
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = messageToSend,
+                        onValueChange = { viewModel.updateMessageToSend(it) },
+                        placeholder = { Text("Escribe tu mensaje") },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    )
+
+                    Button(
+                        onClick = { viewModel.sendMessage() },
+                        enabled = messageToSend.isNotBlank()
+                    ) {
+                        Text("Enviar")
+                    }
+                }
+            }
+        } else {
+            // Si no hay dispositivo conectado, mostrar la lista de dispositivos disponibles
+            Text(
+                text = "Dispositivos conectados:",
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            LazyColumn(
+                modifier = Modifier.weight(1f)
+            ) {
+                items(deviceList) { device ->
+                    DeviceItem(
+                        device = device,
+                        info = viewModel.getDeviceInfo(device),
+                        onDeviceClick = { viewModel.requestPermission(device) }
+                    )
+                }
             }
         }
     }
@@ -253,7 +322,7 @@ fun DeviceItem(device: UsbDevice, info: String, onDeviceClick: () -> Unit) {
                 onClick = onDeviceClick,
                 modifier = Modifier.align(Alignment.End)
             ) {
-                Text("Solicitar Permiso")
+                Text("Conectar")
             }
         }
     }
