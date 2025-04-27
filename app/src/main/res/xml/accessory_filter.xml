@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Define los accesorios USB que se pueden conectar -->
+    <usb-accessory
+        manufacturer="Android"
+        model="UsbSerialDemo"
+        version="1.0" />
+    <!-- Cualquier accesorio Android -->
+    <usb-accessory manufacturer="Android" />
+</resources>

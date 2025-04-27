@@ -1,8 +1,14 @@
 package com.example.conectividadusb
 
-
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Bitmap
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.net.Uri
+import android.provider.MediaStore
+import android.util.Log
+import androidx.activity.result.ActivityResultLauncher
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -10,11 +16,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import androidx.core.graphics.scale
 
 class UsbViewModel(
     private val usbManager: UsbManager,
     private val activity: MainActivity
 ) : ViewModel() {
+    private val TAG = "UsbViewModel"
+
     private val _deviceList = mutableStateListOf<UsbDevice>()
     val deviceList: List<UsbDevice> = _deviceList
 
@@ -24,11 +33,14 @@ class UsbViewModel(
     private val _messageToSend = mutableStateOf("")
     val messageToSend: State<String> = _messageToSend
 
-    private val _receivedMessages = mutableStateListOf<String>()
-    val receivedMessages: List<String> = _receivedMessages
+    private val _receivedMessages = mutableStateListOf<UsbSerialConnection.MessageItem>()
+    val receivedMessages: List<UsbSerialConnection.MessageItem> = _receivedMessages
 
     private val _connectedDevice = mutableStateOf<UsbDevice?>(null)
     val connectedDevice: State<UsbDevice?> = _connectedDevice
+
+    private val _selectedImage = mutableStateOf<Bitmap?>(null)
+    val selectedImage: State<Bitmap?> = _selectedImage
 
     private var usbSerialConnection: UsbSerialConnection? = null
 
@@ -113,6 +125,47 @@ class UsbViewModel(
             _messageToSend.value = ""
         }
         return success
+    }
+
+    fun sendImage(): Boolean {
+        val image = _selectedImage.value ?: return false
+
+        val success = usbSerialConnection?.sendImage(image) ?: false
+        if (success) {
+            _selectedImage.value = null
+        }
+        return success
+    }
+
+    fun setSelectedImage(bitmap: Bitmap?) {
+        _selectedImage.value = bitmap
+    }
+
+    fun handleImageResult(uri: Uri?) {
+        uri?.let {
+            try {
+                val bitmap = MediaStore.Images.Media.getBitmap(activity.contentResolver, uri)
+                // Redimensionar la imagen para mejorar la transferencia
+                val resizedBitmap = resizeBitmap(bitmap, 800, 800)
+                _selectedImage.value = resizedBitmap
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al cargar la imagen: ${e.message}", e)
+                _statusText.value = "Error: No se pudo cargar la imagen"
+            }
+        }
+    }
+
+    private fun resizeBitmap(bitmap: Bitmap, maxWidth: Int, maxHeight: Int): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+
+        val ratio = minOf(maxWidth.toFloat() / width, maxHeight.toFloat() / height)
+
+        return if (ratio < 1) {
+            bitmap.scale((width * ratio).toInt(), (height * ratio).toInt())
+        } else {
+            bitmap
+        }
     }
 
     // Función para obtener información formateada del dispositivo

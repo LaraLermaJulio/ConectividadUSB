@@ -1,15 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- cualquier dispositivo USB -->
+    <!-- Permitir cualquier dispositivo USB -->
     <usb-device />
 
-    <!-- agregar dispositivos específicos si los conocemos -->
-    <!--
-    <usb-device vendor-id="1234" product-id="5678" />
-    -->
-
-    <!-- O especificar por clase de dispositivo -->
-    <!--
-    <usb-device class="255" subclass="66" protocol="1" />
-    -->
+    <!-- Dispositivos Android comunes -->
+    <usb-device vendor-id="1256" />  <!-- Google -->
+    <usb-device vendor-id="1004" />  <!-- LG -->
+    <usb-device vendor-id="22B8" />  <!-- Motorola -->
+    <usb-device vendor-id="04E8" />  <!-- Samsung -->
+    <usb-device vendor-id="2717" />  <!-- Xiaomi -->
+    <usb-device vendor-id="18D1" />  <!-- Google/Android genérico -->
+    <usb-device vendor-id="05C6" />  <!-- Qualcomm -->
+    <usb-device vendor-id="12D1" />  <!-- Huawei -->
+    <usb-device vendor-id="0B05" />  <!-- Asus -->
+    <usb-device vendor-id="0BB4" />  <!-- HTC -->
+    <usb-device vendor-id="0FCE" />  <!-- Sony -->
+    <usb-device vendor-id="2207" />  <!-- OnePlus -->
 </resources>
