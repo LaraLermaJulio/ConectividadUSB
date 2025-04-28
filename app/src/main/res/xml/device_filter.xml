@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- CH340 -->
+    <usb-device vendor-id="6790" />  <!-- 0x1a86 -->
+
+    <!-- CP210x -->
+    <usb-device vendor-id="4292" />  <!-- 0x10c4 -->
+
+    <!-- FTDI -->
+    <usb-device vendor-id="1027" />  <!-- 0x0403 -->
+
+    <!-- Prolific -->
+    <usb-device vendor-id="1659" />  <!-- 0x067b -->
+
+    <!-- CDC ACM -->
+    <usb-device class="2" />         <!-- Clase de comunicaciones -->
+    <usb-device class="10" />        <!-- CDC data -->
+</resources>
